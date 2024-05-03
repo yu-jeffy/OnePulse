@@ -1,51 +1,57 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
+import { auth, db } from '../firebase-config';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { DidJwk } from '@web5/dids';
 
-export default function Signup() {
+const Signup = () => {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [did, setDid] = useState('');
-  const [error, setError] = useState('');
   const router = useRouter();
 
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
+  const handleSignup = async () => {
     try {
-      const response = await fetch('/api/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-        credentials: 'include', // Important for cookies to be handled correctly
+      // Creating user with email and password
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const uid = userCredential.user.uid; // Getting the UID of the newly created user
+      console.log(`Firebase user created: ${uid}`);
+
+      // Generate a new DID using Web5 library
+      const didJwk = await DidJwk.create();
+      console.log(`DID generated: ${didJwk.uri}`);
+
+      // Save user data including uid in Firestore under "users" collection
+      await setDoc(doc(db, "users", uid), {
+        uid: uid,
+        email: email,
+        did: didJwk.uri
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Signup failed');
-      }
-
-      setDid(data.did); // Save DID on successful signup
-      router.push('/dashboard'); // Redirects user to dashboard
-    } catch (err: any) {
-      setError(err.message);
+      console.log("User profile created with UID, Email, and DID.");
+      router.push('/dashboard'); // Navigate to dashboard after successful registration
+    } catch (error) {
+      console.error("Error signing up:", error);
     }
   };
 
   return (
     <div>
-      <form onSubmit={handleSignup}>
-        <h1>Signup</h1>
-        <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} />
-        <button type="submit">Signup</button>
-        {error && <p>{error}</p>}
-        {did && (
-          <div>
-            <h2>Your DID</h2>
-            <p>{did}</p>
-            <p>Please save this DID safely. You'll need it to log in.</p>
-          </div>
-        )}
-      </form>
+      <input
+        type="email"
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <input
+        type="password"
+        placeholder="Password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+      <button onClick={handleSignup}>Sign Up</button>
     </div>
   );
-}
+};
+
+export default Signup;

@@ -1,42 +1,46 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
+import { auth, db, googleProvider } from '../firebase-config'; // auth is already initialized
+import { signInWithPopup, signInWithEmailAndPassword } from 'firebase/auth';
 
-export default function Login() {
-  const [did, setDid] = useState('');
+const Login = () => {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const router = useRouter();
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
+  const handleLogin = async () => {
     try {
-      const response = await fetch('/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ did, password }),
-      });
+      await signInWithEmailAndPassword(auth, email, password);
+      router.push('/dashboard');
+    } catch (error: any) {
+      console.error("Error logging in:", error.message);
+    }
+  };
 
-      if (response.ok) {
-        router.push('/useraccount');
-      } else {
-        throw new Error('Invalid DID or password');
+  const handleGoogleSignIn = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result.user.additionalUserInfo.isNewUser) {
+        const didJwk = await didJwk.create();
+        await db.collection("users").doc(result.user.uid).set({
+          email: result.user.email,
+          did: didJwk.uri
+        });
       }
-    } catch (err: any) {
-      setError(err.message);
+      router.push('/dashboard');
+    } catch (error: any) {
+      console.error("Google Sign-In error:", error.message);
     }
   };
 
   return (
-    <form onSubmit={handleLogin}>
-      <h1>Login</h1>
-      <input type="text" placeholder="DID" value={did} onChange={e => setDid(e.target.value.trim())} />
+    <div>
+      <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
       <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} />
-      <button type="submit">Login</button>
-      {error && <p>{error}</p>}
-    </form>
+      <button onClick={handleLogin}>Login</button>
+      <button onClick={handleGoogleSignIn}>Sign in with Google</button>
+    </div>
   );
-}
+};
+
+export default Login;
